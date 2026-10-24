@@ -8,45 +8,56 @@ pinned baseline.
 | File | Role |
 | --- | --- |
 | `pkl/TypesafeExperiment.pkl` | Spec: endpoint, messages, sanity bands, pinned baseline, tolerances |
-| `scripts/capture.sh` | The only thing that touches the network; writes `build/typesafe-observed.json` |
+| `scripts/capture.sh` | The only thing that touches the TypeSafe network API; writes `build/typesafe-observed.json` |
+| `scripts/bootstrap.sh` | Bootstraps the Proton Pass journals and scoped agent credentials |
 | `pkl/TypesafeExperiment.test.pkl` | Divergence contract (no I/O): facts that must hold, plus examples snapshotted in `-expected.pcf` |
 
-## Run
+## Bootstrap agent journals
 
-Needs `make`, `pkl`, `jq`, `curl`, and `pass-cli` logged in with access to the
-`typesafe.ai` item containing `TYPESAFE_API_KEY`.
+The intended collaboration topology is three agent-local journals: `hypervisor`,
+`manager`, and `worker`. Each agent can edit its own journal and read the other
+two, but cannot edit them.
 
-```sh
-make
-```
-
-prints the available commands and does no network I/O.
-
-To capture from TypeSafe and verify the result:
+With `pass-cli` logged in as the human/owner account:
 
 ```sh
-make run
+make bootstrap
 ```
 
-By default the existing `infra` vault-name lookup is used. To select the vault
-explicitly by Proton Pass share ID:
+That creates or reuses the `typesafe-experiment-agents` vault, creates the three
+journal notes if needed, creates one scoped credential per role, and applies the
+item-level grants.
+
+To use an existing vault instead:
 
 ```sh
-make run SHARE_ID=...
+make bootstrap SHARE_ID=...
 ```
 
-You can also override the number of repeated captures:
+New Proton Pass credentials are printed once by `pass-cli`. Save each credential
+when it is created; the bootstrap does not write bearer tokens into the repo.
+Re-running bootstrap reuses existing vaults, journals, and named credentials.
+
+Useful overrides:
 
 ```sh
-make run TYPESAFE_RUNS=5
+make bootstrap VAULT_NAME=my-agent-journals
+make bootstrap AGENT_PREFIX=my-loop AGENT_EXPIRATION=1m
 ```
 
-Useful individual steps:
+Bare `make` only prints help.
+
+## Run the TypeSafe experiment
+
+Needs `pkl`, `jq`, `curl`, and `pass-cli` logged in with access to
+`pass://infra/typesafe.ai/TYPESAFE_API_KEY`.
 
 ```sh
 make capture   # paid TypeSafe calls; writes build/typesafe-observed.json
 make check     # verifies the most recent capture; no network I/O
 ```
+
+Override capture repetitions with `TYPESAFE_RUNS=5 make capture`.
 
 The key is read inside the capture script and passed to curl on stdin; it is
 never written to `build/` or printed.
