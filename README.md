@@ -13,17 +13,43 @@ pinned baseline.
 
 ## Run
 
-Needs `pkl`, `jq`, `curl`, and `pass-cli` logged in with access to
-`pass://infra/typesafe.ai/TYPESAFE_API_KEY` (paid API calls; `TYPESAFE_RUNS`,
-default 3, sets repetitions).
+Needs `make`, `pkl`, `jq`, `curl`, and `pass-cli` logged in with access to the
+`typesafe.ai` item containing `TYPESAFE_API_KEY`.
 
 ```sh
-bash scripts/capture.sh
-pkl test pkl/TypesafeExperiment.test.pkl
+make
 ```
 
-The key is read inside the script and passed to curl on stdin; it is never
-written to `build/` or printed.
+prints the available commands and does no network I/O.
+
+To capture from TypeSafe and verify the result:
+
+```sh
+make run
+```
+
+By default the existing `infra` vault-name lookup is used. To select the vault
+explicitly by Proton Pass share ID:
+
+```sh
+make run SHARE_ID=...
+```
+
+You can also override the number of repeated captures:
+
+```sh
+make run TYPESAFE_RUNS=5
+```
+
+Useful individual steps:
+
+```sh
+make capture   # paid TypeSafe calls; writes build/typesafe-observed.json
+make check     # verifies the most recent capture; no network I/O
+```
+
+The key is read inside the capture script and passed to curl on stdin; it is
+never written to `build/` or printed.
 
 ## What counts as divergence
 
