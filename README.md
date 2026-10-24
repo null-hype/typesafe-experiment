@@ -8,22 +8,59 @@ pinned baseline.
 | File | Role |
 | --- | --- |
 | `pkl/TypesafeExperiment.pkl` | Spec: endpoint, messages, sanity bands, pinned baseline, tolerances |
-| `scripts/capture.sh` | The only thing that touches the network; writes `build/typesafe-observed.json` |
+| `scripts/capture.sh` | The only thing that touches the TypeSafe network API; writes `build/typesafe-observed.json` |
+| `scripts/bootstrap.sh` | Bootstraps the Proton Pass journals and scoped agent credentials |
 | `pkl/TypesafeExperiment.test.pkl` | Divergence contract (no I/O): facts that must hold, plus examples snapshotted in `-expected.pcf` |
 
-## Run
+## Bootstrap an agent
 
-Needs `pkl`, `jq`, `curl`, and `pass-cli` logged in with access to
-`pass://infra/typesafe.ai/TYPESAFE_API_KEY` (paid API calls; `TYPESAFE_RUNS`,
-default 3, sets repetitions).
+Each agent (`hypervisor`, `manager`, `worker`) gets its own Proton Pass vault,
+`typesafe-experiment-<agent>`, holding a `journal` item with real custom fields
+(`working_on`, `current_hypothesis`, `evidence`, `uncertain_about`,
+`next_action`, `possible_conflicts`, in that priority order). The fields are fixed when the item is
+created: `item update` can edit a field but not add one. A vault, not an item,
+is the unit of access, so an agent can also create new items in its own vault.
+
+Bootstrapping is owner-only. It creates vaults, tokens and grants, which PAT
+sessions cannot do, and the script refuses to run from one. Log in as yourself
+first (`pass-cli login`), then:
 
 ```sh
-bash scripts/capture.sh
-pkl test pkl/TypesafeExperiment.test.pkl
+make bootstrap                    # the default agent (worker)
+make bootstrap AGENT=manager
+make hypervisor manager worker    # any subset, in any order
 ```
 
-The key is read inside the script and passed to curl on stdin; it is never
-written to `build/` or printed.
+Per agent it creates or reuses the vault, the journal, and a credential
+`typesafe-experiment-<agent>`, then grants:
+
+- the agent `editor` on its own vault
+- the agent `viewer` on each other agent's vault that exists, and each other
+  agent's credential `viewer` on this vault (so order does not matter)
+- the agent `viewer` on `infra/typesafe.ai` so `make capture` works as that
+  agent (`GRANT_TYPESAFE=0` to skip)
+
+A new credential's token is printed once by `pass-cli`. Save it then; nothing
+is written to the repo. Re-running reuses what exists and does not mint a new
+token. `AGENT_EXPIRATION` takes `1d`, `1w`, `1m`, `3m`, `6m` or `1y`; note `3m`
+is three months.
+
+Bare `make` only prints help.
+
+## Run the TypeSafe experiment
+
+Needs `pkl`, `jq`, `curl`, and `pass-cli` logged in with access to
+`pass://infra/typesafe.ai/TYPESAFE_API_KEY`.
+
+```sh
+make capture   # paid TypeSafe calls; writes build/typesafe-observed.json
+make check     # verifies the most recent capture; no network I/O
+```
+
+Override capture repetitions with `TYPESAFE_RUNS=5 make capture`.
+
+The key is read inside the capture script and passed to curl on stdin; it is
+never written to `build/` or printed.
 
 ## What counts as divergence
 
