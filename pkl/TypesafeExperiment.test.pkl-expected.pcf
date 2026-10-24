@@ -1,0 +1,27 @@
+examples {
+  ["resolved models observed"] {
+    List("jev-1.14.0")
+  }
+  ["drift status per case"] {
+    new {
+      ["prod-db-down"] = "ok"
+    }
+    new {
+      ["api-500s"] = "ok"
+    }
+    new {
+      ["wiki-next-week"] = "ok"
+    }
+    new {
+      ["thanks"] = "ok"
+    }
+  }
+  ["docs example vs pinned baseline"] {
+    new {
+      docsModel = "jev-1.13.0"
+      docsScore = 0.99
+      baselineModel = "jev-1.14.0"
+      baselineScore = 0.775
+    }
+  }
+}

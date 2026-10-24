@@ -1,0 +1,99 @@
+/// Divergence contract for the typesafe.ai urgency experiment: what
+/// scripts/capture.sh observed (../build/typesafe-observed.json)
+/// must agree with the declared spec and pinned baseline in
+/// TypesafeExperiment.pkl. This module does no network I/O itself.
+///
+/// `facts` hold claims that must stay true (shape, ranking, bands, drift
+/// within tolerance, same resolved model). A new model version fails the
+/// "resolved model matches baseline" fact on purpose -- re-pin the baseline
+/// after looking at the diff in the `-expected.pcf`.
+amends "pkl:test"
+
+import "pkl:json"
+import "TypesafeExperiment.pkl" as spec
+
+local observed: Dynamic = new json.Parser {}.parse(read("../build/typesafe-observed.json").text)
+
+local runs: List<Dynamic> = observed.runs.toList()
+
+local function scoresFor(id: String): List<Number> =
+  runs.map((r) -> r.scores.getProperty(id))
+
+local function mean(xs: List<Number>): Number =
+  xs.fold(0.0, (a, b) -> a + b) / xs.length
+
+local function spread(xs: List<Number>): Number =
+  xs.fold(xs.first, (a, b) -> if (b > a) b else a) - xs.fold(xs.first, (a, b) -> if (b < a) b else a)
+
+local function drift(c: spec.Case): Number =
+  (mean(scoresFor(c.id)) - c.baselineMean).abs
+
+local cases: List<spec.Case> = spec.cases.toList()
+
+facts {
+  ["response shape intact: every run has a model and a score for every case"] {
+    runs.length > 0
+    for (r in runs) {
+      r.model is String
+      for (c in cases) {
+        r.scores.hasProperty(c.id)
+      }
+    }
+  }
+
+  ["resolved model matches the baseline model"] {
+    for (r in runs) {
+      r.model == spec.baselineModel
+    }
+  }
+
+  ["each case's mean score stays inside its sanity band"] {
+    for (c in cases) {
+      mean(scoresFor(c.id)) >= c.minScore
+      mean(scoresFor(c.id)) <= c.maxScore
+    }
+  }
+
+  ["urgency ranking holds: the cases keep their declared order"] {
+    for (i, c in cases.take(cases.length - 1)) {
+      mean(scoresFor(c.id)) > mean(scoresFor(cases[i + 1].id))
+    }
+  }
+
+  ["each case's mean has not drifted from the baseline beyond tolerance"] {
+    for (c in cases) {
+      drift(c) <= spec.tolerance
+    }
+  }
+
+  ["run-to-run spread is within tolerance (the API is stable enough to compare against)"] {
+    for (c in cases) {
+      spread(scoresFor(c.id)) <= spec.spreadTolerance
+    }
+  }
+}
+
+examples {
+  // Reviewable diff when the model moves: shows up in the committed
+  // `.pkl-expected.pcf` the next time someone runs `pkl test --overwrite`.
+  ["resolved models observed"] {
+    runs.map((r) -> r.model).distinct
+  }
+
+  ["drift status per case"] {
+    for (c in cases) {
+      new Mapping { [c.id] = if (drift(c) <= spec.tolerance) "ok" else "diverged" }
+    }
+  }
+
+  // The divergence already on record: the docs' illustrative score on
+  // jev-1.13.0 vs the pinned baseline on jev-1.14.0 (constants, so stable).
+  ["docs example vs pinned baseline"] {
+    new Dynamic {
+      docsModel = spec.docsExample.model
+      docsScore = spec.docsExample.noul
+      baselineModel = spec.baselineModel
+      baselineScore = cases.find((c) -> c.id == spec.docsExample.caseId).baselineMean
+    }
+  }
+}

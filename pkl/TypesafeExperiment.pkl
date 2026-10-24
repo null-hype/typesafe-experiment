@@ -1,0 +1,87 @@
+/// Declared spec and pinned baseline for the typesafe.ai urgency experiment.
+///
+/// Single source of truth for the experiment: scripts/capture.sh
+/// reads `cases` from here (via `pkl eval -f json`) to build its requests, and
+/// TypesafeExperiment.test.pkl compares what it observed against `baselineMean`
+/// and `baselineModel`. Changing a case here and re-capturing is the only way
+/// to change the experiment, so the request and the expectation cannot drift
+/// apart silently.
+///
+/// The baseline is a recorded observation, not a prediction: four runs on
+/// 2026-10-25 against `jev-1.14.0` (see `tolerance` and `spreadTolerance` for
+/// the measured noise). Re-pin it deliberately
+/// when the model moves; a model-version change fails the test on purpose.
+module typesafe_experiment
+
+class Case {
+  /// Stable key used in the observed JSON and the test output.
+  id: String
+  state: String
+  /// Coarse sanity band for the noul score. Wider than `tolerance` on
+  /// purpose: it catches a broken model, not a nudged one.
+  minScore: Number
+  maxScore: Number
+  /// Mean of the four 2026-10-25 runs.
+  baselineMean: Number
+}
+
+endpoint = "https://api.typesafe.ai/v1/systemone"
+requestedModel = "jev-latest"
+questionId = "is_urgent"
+instructions = "The message conveys urgency or time-sensitivity"
+
+/// Resolved model the baseline was recorded against.
+baselineModel = "jev-1.14.0"
+
+/// Max allowed |observed mean - baselineMean|. Means of 3 runs moved ~0.03 at
+/// most between captures, so this flags a real shift without flapping.
+tolerance = 0.05
+
+/// Max allowed max-min spread across one capture's runs. Across seven runs
+/// the noisiest case (wiki-next-week) ranged 0.51-0.57, so 0.10 is noise
+/// headroom; a wider spread means the API stopped being comparable.
+spreadTolerance = 0.1
+
+/// Listed in descending expected urgency; the test asserts the observed
+/// means keep this order.
+cases: Listing<Case> = new {
+  new Case {
+    id = "prod-db-down"
+    state = "Production database is down and customers cannot check out right now."
+    minScore = 0.8
+    maxScore = 1.0
+    baselineMean = 0.9825
+  }
+  new Case {
+    id = "api-500s"
+    state = "Our API integration started returning 500 errors on every request."
+    minScore = 0.5
+    maxScore = 1.0
+    baselineMean = 0.775
+  }
+  new Case {
+    id = "wiki-next-week"
+    state = "Whenever you get a chance, could you update the team wiki next week?"
+    minScore = 0.2
+    maxScore = 0.8
+    baselineMean = 0.53
+  }
+  new Case {
+    id = "thanks"
+    state = "Thanks for the great meeting yesterday, the notes were helpful."
+    minScore = 0.0
+    maxScore = 0.2
+    baselineMean = 0.0225
+  }
+}
+
+/// The one divergence already on record: the quickstart's own example
+/// (docs.typesafe.ai/introduction/quickstart) shows 0.99 on jev-1.13.0 for
+/// the same sentence as the `api-500s` case, which scored ~0.775 on
+/// jev-1.14.0. The docs response is labelled illustrative, so this is a
+/// reference point, not a failing expectation.
+docsExample {
+  model = "jev-1.13.0"
+  caseId = "api-500s"
+  noul = 0.99
+}
