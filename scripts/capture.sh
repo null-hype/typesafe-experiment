@@ -3,9 +3,11 @@
 # and writes what it observed to build/typesafe-observed.json, for
 # pkl/TypesafeExperiment.test.pkl to compare against the pinned baseline.
 #
-# It makes paid network calls and needs a
-# secret. Run it on purpose. TYPESAFE_RUNS (default 3) sets repetitions.
-# Only the resolved model, scores and usage are recorded -- never the key.
+# It makes paid network calls and needs a secret. Run it on purpose.
+# TYPESAFE_RUNS (default 3) sets repetitions. SHARE_ID optionally selects the
+# Proton Pass vault by share ID; otherwise the existing `infra` vault-name
+# lookup is used. Only the resolved model, scores and usage are recorded --
+# never the key.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,7 +28,14 @@ model="$(jq -r .requestedModel <<<"$spec")"
 qid="$(jq -r .questionId <<<"$spec")"
 instructions="$(jq -r .instructions <<<"$spec")"
 
-key="$(pass-cli item view "pass://infra/typesafe.ai/TYPESAFE_API_KEY")"
+if [[ -n "${SHARE_ID:-}" ]]; then
+  key="$(pass-cli item view \
+    --share-id "$SHARE_ID" \
+    --item-title "typesafe.ai" \
+    --field "TYPESAFE_API_KEY")"
+else
+  key="$(pass-cli item view "pass://infra/typesafe.ai/TYPESAFE_API_KEY")"
+fi
 
 runs=()
 for _ in $(seq "$RUNS"); do
