@@ -1,26 +1,36 @@
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
-.PHONY: help run capture check test
+.PHONY: help bootstrap capture check test
 
+VAULT_NAME ?= typesafe-experiment-agents
+AGENT_PREFIX ?= typesafe-experiment
+AGENT_EXPIRATION ?= 3m
 TYPESAFE_RUNS ?= 3
 
 help:
 	@printf '%s\n' \
 		'Usage:' \
-		'  make run                    capture from TypeSafe and verify the result' \
-		'  make run SHARE_ID=...       same, selecting the Proton Pass vault by share ID' \
-		'  make capture                capture only (makes paid API calls)' \
-		'  make check                  verify the most recent capture; no network I/O' \
+		'  make bootstrap                    create/reuse the Pass vault, journals, credentials, and grants' \
+		'  make bootstrap SHARE_ID=...       bootstrap into an existing Proton Pass vault share' \
+		'  make capture                      capture the TypeSafe experiment (paid API calls)' \
+		'  make check                        verify the most recent capture; no network I/O' \
 		'' \
-		'Options:' \
-		'  SHARE_ID=...                optional Proton Pass vault share ID' \
-		'  TYPESAFE_RUNS=3             number of repeated captures (default: 3)'
+		'Bootstrap options:' \
+		'  VAULT_NAME=typesafe-experiment-agents' \
+		'  SHARE_ID=...                      use an existing vault instead of creating/resolving by name' \
+		'  AGENT_PREFIX=typesafe-experiment  prefix for hypervisor/manager/worker credentials' \
+		'  AGENT_EXPIRATION=3m               expiration for newly-created credentials'
 
-run: capture check
+bootstrap:
+	@VAULT_NAME="$(VAULT_NAME)" \
+	 SHARE_ID="$(SHARE_ID)" \
+	 AGENT_PREFIX="$(AGENT_PREFIX)" \
+	 AGENT_EXPIRATION="$(AGENT_EXPIRATION)" \
+	 bash scripts/bootstrap.sh
 
 capture:
-	@SHARE_ID="$(SHARE_ID)" TYPESAFE_RUNS="$(TYPESAFE_RUNS)" bash scripts/capture.sh
+	@TYPESAFE_RUNS="$(TYPESAFE_RUNS)" bash scripts/capture.sh
 
 check:
 	@if command -v mise >/dev/null 2>&1 && mise exec -- pkl --version >/dev/null 2>&1; then \
