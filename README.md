@@ -12,38 +12,38 @@ pinned baseline.
 | `scripts/bootstrap.sh` | Bootstraps the Proton Pass journals and scoped agent credentials |
 | `pkl/TypesafeExperiment.test.pkl` | Divergence contract (no I/O): facts that must hold, plus examples snapshotted in `-expected.pcf` |
 
-## Bootstrap agent journals
+## Bootstrap an agent
 
-The intended collaboration topology is three agent-local journals: `hypervisor`,
-`manager`, and `worker`. Each agent can edit its own journal and read the other
-two, but cannot edit them.
+Each agent (`hypervisor`, `manager`, `worker`) gets its own Proton Pass vault,
+`typesafe-experiment-<agent>`, holding a `journal` item with real custom fields
+(`working_on`, `current_hypothesis`, `evidence`, `uncertain_about`,
+`next_action`, `possible_conflicts`, in that priority order). The fields are fixed when the item is
+created: `item update` can edit a field but not add one. A vault, not an item,
+is the unit of access, so an agent can also create new items in its own vault.
 
-With `pass-cli` logged in as the human/owner account:
-
-```sh
-make bootstrap
-```
-
-That creates or reuses the `typesafe-experiment-agents` vault, creates the three
-journal notes if needed, creates one scoped credential per role, and applies the
-item-level grants.
-
-To use an existing vault instead:
+Bootstrapping is owner-only. It creates vaults, tokens and grants, which PAT
+sessions cannot do, and the script refuses to run from one. Log in as yourself
+first (`pass-cli login`), then:
 
 ```sh
-make bootstrap SHARE_ID=...
+make bootstrap                    # the default agent (worker)
+make bootstrap AGENT=manager
+make hypervisor manager worker    # any subset, in any order
 ```
 
-New Proton Pass credentials are printed once by `pass-cli`. Save each credential
-when it is created; the bootstrap does not write bearer tokens into the repo.
-Re-running bootstrap reuses existing vaults, journals, and named credentials.
+Per agent it creates or reuses the vault, the journal, and a credential
+`typesafe-experiment-<agent>`, then grants:
 
-Useful overrides:
+- the agent `editor` on its own vault
+- the agent `viewer` on each other agent's vault that exists, and each other
+  agent's credential `viewer` on this vault (so order does not matter)
+- the agent `viewer` on `infra/typesafe.ai` so `make capture` works as that
+  agent (`GRANT_TYPESAFE=0` to skip)
 
-```sh
-make bootstrap VAULT_NAME=my-agent-journals
-make bootstrap AGENT_PREFIX=my-loop AGENT_EXPIRATION=1m
-```
+A new credential's token is printed once by `pass-cli`. Save it then; nothing
+is written to the repo. Re-running reuses what exists and does not mint a new
+token. `AGENT_EXPIRATION` takes `1d`, `1w`, `1m`, `3m`, `6m` or `1y`; note `3m`
+is three months.
 
 Bare `make` only prints help.
 
